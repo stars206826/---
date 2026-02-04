@@ -1,0 +1,1933 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <title>会说话的文物 · Neo4j增强版</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Roboto+Mono:wght@400;500&display=swap" rel="stylesheet">
+  
+  <style>
+    /* 全局变量 */
+    :root {
+      --primary: #00f3ff;
+      --secondary: #bc13fe;
+      --accent: #00ff9d;
+      --bg-dark: #03050c;
+      --glass-bg: rgba(8, 15, 30, 0.75);
+      --glass-border: rgba(0, 243, 255, 0.3);
+      --text-main: #e0f7ff;
+      --text-dim: #7aa0b8;
+      --header-h: 110px;
+      --neo4j-color: #00d4aa;
+      --static-color: #ffa726;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: 'Orbitron', 'Microsoft YaHei', sans-serif;
+      background-color: var(--bg-dark);
+      background-image: 
+        radial-gradient(circle at 50% -20%, rgba(0, 243, 255, 0.15), transparent 40%),
+        radial-gradient(circle at 0% 100%, rgba(188, 19, 254, 0.1), transparent 30%);
+      color: var(--text-main);
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+
+    /* 动态文物背景 */
+    body::before {
+      content: "";
+      position: fixed;
+      top: 0; left: 0; width: 100%; height: 100%;
+      background-image: var(--current-bg, none);
+      background-size: cover;
+      background-position: center;
+      background-repeat: no-repeat;
+      filter: blur(0px) brightness(var(--bg-brightness, 0.7)) contrast(1.1);
+      transition: background-image 2s ease-in-out, filter 2s ease-in-out;
+      z-index: -2;
+      opacity: 0.9;
+      pointer-events: none;
+    }
+
+    /* 动态背景网格叠加 */
+    body::after {
+      content: "";
+      position: fixed;
+      top: 0; left: 0; width: 200%; height: 200%;
+      background: 
+        linear-gradient(rgba(0, 243, 255, 0.02) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(0, 243, 255, 0.02) 1px, transparent 1px);
+      background-size: 50px 50px;
+      z-index: -1;
+      transform: perspective(500px) rotateX(60deg) translateY(-100px) translateZ(-200px);
+      animation: gridFly 20s linear infinite;
+      pointer-events: none;
+    }
+    
+    @keyframes gridFly { 
+      0% { transform: perspective(500px) rotateX(60deg) translateY(0); } 
+      100% { transform: perspective(500px) rotateX(60deg) translateY(50px); } 
+    }
+
+    /* 滚动条 */
+    ::-webkit-scrollbar { width: 4px; height: 4px; }
+    ::-webkit-scrollbar-thumb { background: var(--primary); border-radius: 2px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+
+    /* 头部区域 */
+    header {
+      height: var(--header-h);
+      background: rgba(3, 5, 12, 0.9);
+      border-bottom: 1px solid var(--glass-border);
+      display: flex;
+      flex-direction: column;
+      position: relative;
+      z-index: 100;
+      box-shadow: 0 5px 20px rgba(0,0,0,0.5);
+    }
+    
+    .header-top {
+      flex: 1;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 24px;
+    }
+    
+    .brand h1 {
+      font-size: 24px;
+      letter-spacing: 2px;
+      background: linear-gradient(90deg, #fff, var(--primary));
+      -webkit-background-clip: text;
+      background-clip: text;
+      -webkit-text-fill-color: transparent;
+      text-shadow: 0 0 15px rgba(0, 243, 255, 0.4);
+    }
+    
+    .brand p { 
+      font-size: 10px; 
+      color: var(--text-dim); 
+      letter-spacing: 1px; 
+    }
+
+    /* 系统状态显示 */
+    .system-status {
+      display: flex;
+      gap: 15px;
+      font-size: 10px;
+      align-items: center;
+    }
+
+    .status-item {
+      display: flex;
+      align-items: center;
+      gap: 5px;
+      padding: 4px 8px;
+      border-radius: 4px;
+      border: 1px solid transparent;
+      transition: all 0.3s;
+    }
+
+    .status-item.neo4j {
+      color: var(--neo4j-color);
+      border-color: rgba(0, 212, 170, 0.3);
+      background: rgba(0, 212, 170, 0.1);
+    }
+
+    .status-item.static {
+      color: var(--static-color);
+      border-color: rgba(255, 167, 38, 0.3);
+      background: rgba(255, 167, 38, 0.1);
+    }
+
+    /* 导航栏 */
+    .nav-bar {
+      height: 40px;
+      display: flex;
+      justify-content: center;
+      gap: 2px;
+      background: rgba(0,0,0,0.3);
+    }
+    
+    .nav-btn {
+      background: transparent;
+      border: none;
+      color: var(--text-dim);
+      padding: 0 30px;
+      font-family: 'Orbitron', sans-serif;
+      font-size: 12px;
+      cursor: pointer;
+      position: relative;
+      transition: all 0.3s;
+      border-bottom: 2px solid transparent;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+    }
+    
+    .nav-btn:hover { 
+      color: #fff; 
+      background: rgba(255,255,255,0.05); 
+    }
+    
+    .nav-btn.active {
+      color: var(--primary);
+      border-bottom: 2px solid var(--primary);
+      background: linear-gradient(to top, rgba(0, 243, 255, 0.1), transparent);
+      text-shadow: 0 0 8px var(--primary);
+    }
+    
+    .nav-btn.active::before { content: "["; position: absolute; left: 10px; opacity: 0.5; }
+    .nav-btn.active::after { content: "]"; position: absolute; right: 10px; opacity: 0.5; }
+
+    /* 主内容容器 */
+    .main-viewport {
+      flex: 1;
+      position: relative;
+      overflow: hidden;
+      padding: 20px;
+    }
+
+    /* 页面切换 */
+    .page-section {
+      display: none;
+      height: 100%;
+      width: 100%;
+      animation: pageFadeIn 0.4s ease-out;
+    }
+    
+    .page-section.active { display: block; }
+    
+    @keyframes pageFadeIn {
+      0% { opacity: 0; transform: scale(0.98); filter: blur(4px); }
+      100% { opacity: 1; transform: scale(1); filter: blur(0); }
+    }
+
+    /* 玻璃面板 */
+    .glass-panel {
+      background: var(--glass-bg);
+      border: 1px solid var(--glass-border);
+      border-radius: 6px;
+      box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.6);
+      backdrop-filter: blur(16px);
+      display: flex;
+      flex-direction: column;
+      position: relative;
+      overflow: hidden;
+    }
+    
+    .panel-header {
+      padding: 12px 16px;
+      border-bottom: 1px solid rgba(255,255,255,0.08);
+      background: rgba(0,0,0,0.25);
+      display: flex; 
+      justify-content: space-between; 
+      align-items: center;
+    }
+    
+    .panel-title { 
+      font-size: 14px; 
+      font-weight: bold; 
+      color: var(--text-main); 
+      display: flex; 
+      align-items: center; 
+      gap: 8px; 
+    }
+    
+    .panel-tag { 
+      font-size: 10px; 
+      background: rgba(0, 243, 255, 0.1); 
+      border: 1px solid var(--primary); 
+      color: var(--primary); 
+      padding: 2px 8px; 
+      border-radius: 2px; 
+    }
+
+    .panel-tag.neo4j {
+      background: rgba(0, 212, 170, 0.1);
+      border-color: var(--neo4j-color);
+      color: var(--neo4j-color);
+    }
+
+    .panel-tag.static {
+      background: rgba(255, 167, 38, 0.1);
+      border-color: var(--static-color);
+      color: var(--static-color);
+    }
+
+    /* 全息终端页面 */
+    #page-app.active {
+      display: grid;
+      grid-template-columns: 280px minmax(0, 1.4fr) minmax(0, 1.2fr);
+      gap: 20px;
+      height: 100%;
+    }
+
+    /* 视频生成页面 */
+    #page-video {
+      overflow-y: auto;
+      max-width: 1400px;
+      margin: 0 auto;
+      padding: 20px;
+    }
+    
+    .video-workspace {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 20px;
+      height: calc(100vh - 200px);
+    }
+    
+    .video-input-panel, .video-preview-panel {
+      background: var(--glass-bg);
+      border: 1px solid var(--glass-border);
+      border-radius: 8px;
+      padding: 20px;
+      display: flex;
+      flex-direction: column;
+      gap: 15px;
+    }
+    
+    .section-title {
+      font-size: 16px;
+      color: var(--primary);
+      border-bottom: 1px solid var(--primary);
+      padding-bottom: 8px;
+      margin-bottom: 15px;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+    }
+    
+    .input-group {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+    
+    .input-label {
+      font-size: 12px;
+      color: var(--text-dim);
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+    
+    .text-input {
+      background: rgba(0,0,0,0.5);
+      border: 1px solid var(--glass-border);
+      color: #fff;
+      padding: 12px;
+      border-radius: 4px;
+      font-size: 14px;
+      font-family: 'Microsoft YaHei', sans-serif;
+      resize: vertical;
+      min-height: 120px;
+      outline: none;
+      transition: all 0.3s;
+    }
+    
+    .text-input:focus {
+      border-color: var(--primary);
+      background: rgba(0, 243, 255, 0.08);
+      box-shadow: 0 0 10px rgba(0, 243, 255, 0.2);
+    }
+    
+    .params-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 15px;
+    }
+    
+    .param-item {
+      display: flex;
+      flex-direction: column;
+      gap: 5px;
+    }
+    
+    .param-select, .param-input {
+      background: rgba(0,0,0,0.5);
+      border: 1px solid var(--glass-border);
+      color: #fff;
+      padding: 8px;
+      border-radius: 4px;
+      font-size: 12px;
+      outline: none;
+    }
+    
+    .param-select:focus, .param-input:focus {
+      border-color: var(--accent);
+      background: rgba(0, 255, 157, 0.08);
+    }
+    
+    .generate-btn {
+      background: linear-gradient(135deg, var(--primary), var(--accent));
+      border: none;
+      color: #000;
+      padding: 15px;
+      border-radius: 6px;
+      font-size: 14px;
+      font-weight: bold;
+      cursor: pointer;
+      transition: all 0.3s;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      margin-top: 10px;
+    }
+    
+    .generate-btn:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 5px 20px rgba(0, 243, 255, 0.3);
+    }
+    
+    .generate-btn:disabled {
+      background: rgba(255,255,255,0.1);
+      color: var(--text-dim);
+      cursor: not-allowed;
+      transform: none;
+      box-shadow: none;
+    }
+    
+    .video-canvas {
+      width: 100%;
+      height: 300px;
+      background: #000;
+      border: 1px solid var(--glass-border);
+      border-radius: 4px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: var(--text-dim);
+      font-size: 14px;
+      margin-bottom: 15px;
+      position: relative;
+      overflow: hidden;
+    }
+    
+    .video-canvas video {
+      width: 100%;
+      height: 100%;
+      object-fit: contain;
+    }
+    
+    .progress-bar {
+      width: 100%;
+      height: 4px;
+      background: rgba(255,255,255,0.1);
+      border-radius: 2px;
+      overflow: hidden;
+      margin-bottom: 15px;
+    }
+    
+    .progress-fill {
+      height: 100%;
+      background: linear-gradient(90deg, var(--primary), var(--accent));
+      width: 0%;
+      transition: width 0.3s;
+    }
+    
+    .video-controls {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+    
+    .control-btn {
+      background: rgba(255,255,255,0.1);
+      border: 1px solid var(--glass-border);
+      color: var(--text-main);
+      padding: 8px 16px;
+      border-radius: 4px;
+      font-size: 12px;
+      cursor: pointer;
+      transition: all 0.3s;
+    }
+    
+    .control-btn:hover {
+      background: rgba(255,255,255,0.2);
+      border-color: var(--primary);
+    }
+
+    /* 简化的文物列表和对话样式 */
+    .relic-list { 
+      flex: 1; 
+      overflow-y: auto; 
+      padding: 10px; 
+      display: flex; 
+      flex-direction: column; 
+      gap: 8px; 
+    }
+    
+    .relic-item { 
+      display: flex; 
+      align-items: center; 
+      gap: 10px; 
+      padding: 10px; 
+      background: rgba(255,255,255,0.03); 
+      border: 1px solid rgba(255,255,255,0.05); 
+      border-radius: 4px; 
+      cursor: pointer; 
+      transition: all 0.2s; 
+    }
+    
+    .relic-item:hover { 
+      background: rgba(0, 243, 255, 0.1); 
+      border-color: var(--primary); 
+    }
+    
+    .relic-item.active { 
+      background: linear-gradient(90deg, rgba(0, 243, 255, 0.2), transparent); 
+      border-left: 3px solid var(--primary); 
+    }
+    
+    .relic-thumb { 
+      width: 36px; 
+      height: 36px; 
+      background: rgba(0,0,0,0.5); 
+      border-radius: 50%; 
+      display: flex; 
+      align-items: center; 
+      justify-content: center; 
+      font-size: 18px; 
+      border: 1px solid rgba(255,255,255,0.2); 
+    }
+    
+    .relic-info h4 { 
+      font-size: 13px; 
+      color: #fff; 
+      margin-bottom: 2px; 
+    }
+    
+    .relic-info p { 
+      font-size: 10px; 
+      color: var(--text-dim); 
+    }
+
+    .controls { 
+      padding: 12px; 
+      display: flex; 
+      flex-direction: column; 
+      gap: 10px; 
+    }
+    
+    .control-row { 
+      display: flex; 
+      gap: 10px; 
+    } 
+    
+    .control-group { 
+      flex: 1; 
+    }
+    
+    select, input, textarea { 
+      width: 100%; 
+      background: rgba(0,0,0,0.5); 
+      border: 1px solid var(--glass-border); 
+      color: #fff; 
+      padding: 8px; 
+      border-radius: 4px; 
+      font-size: 12px; 
+      outline: none; 
+    }
+    
+    select:focus, input:focus, textarea:focus { 
+      border-color: var(--primary); 
+      background: rgba(0, 243, 255, 0.08); 
+    }
+    
+    .cyber-btn { 
+      flex: 1; 
+      background: linear-gradient(135deg, rgba(0, 243, 255, 0.15), rgba(0, 243, 255, 0.05)); 
+      border: 1px solid var(--primary); 
+      color: var(--primary); 
+      padding: 10px; 
+      font-weight: bold; 
+      cursor: pointer; 
+      transition: all 0.3s; 
+      clip-path: polygon(10px 0, 100% 0, 100% calc(100% - 10px), calc(100% - 10px) 100%, 0 100%, 0 10px); 
+      display: flex; 
+      justify-content: center; 
+      gap: 5px; 
+      font-size: 11px; 
+    }
+    
+    .cyber-btn:hover { 
+      background: var(--primary); 
+      color: #000; 
+      box-shadow: 0 0 15px var(--primary); 
+    }
+    
+    .cyber-btn.secondary { 
+      border-color: var(--text-dim); 
+      color: var(--text-dim); 
+      background: transparent; 
+    }
+    
+    .cyber-btn.secondary:hover { 
+      border-color: #fff; 
+      color: #fff; 
+      background: rgba(255,255,255,0.1); 
+      box-shadow: none; 
+    }
+
+    .chat-container { 
+      flex: 1; 
+      background: rgba(0,0,0,0.3); 
+      border-top: 1px solid rgba(255,255,255,0.08); 
+      padding: 12px; 
+      overflow-y: auto; 
+      display: flex; 
+      flex-direction: column; 
+      gap: 10px; 
+    }
+    
+    .chat-msg { 
+      max-width: 90%; 
+      padding: 8px 12px; 
+      border-radius: 4px; 
+      font-size: 12px; 
+      line-height: 1.5; 
+      position: relative;
+    }
+    
+    .chat-msg.user { 
+      align-self: flex-end; 
+      background: linear-gradient(135deg, var(--primary), #0097a7); 
+      color: #00222b; 
+      border-bottom-right-radius: 0; 
+    }
+    
+    .chat-msg.bot { 
+      align-self: flex-start; 
+      background: rgba(255, 255, 255, 0.06); 
+      border: 1px solid var(--glass-border); 
+      color: var(--text-main); 
+      border-top-left-radius: 0; 
+    }
+
+    /* 数据源标识 */
+    .data-source-badge {
+      position: absolute;
+      top: -8px;
+      right: 8px;
+      font-size: 8px;
+      padding: 2px 6px;
+      border-radius: 8px;
+      font-weight: bold;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    .data-source-badge.neo4j {
+      background: var(--neo4j-color);
+      color: #000;
+    }
+
+    .data-source-badge.static {
+      background: var(--static-color);
+      color: #000;
+    }
+
+    /* 语音控制按钮 */
+    .voice-controls {
+      display: flex;
+      gap: 8px;
+      margin-top: 8px;
+    }
+
+    .voice-btn {
+      flex: 1;
+      background: rgba(0, 243, 255, 0.1);
+      border: 1px solid var(--primary);
+      color: var(--primary);
+      padding: 8px;
+      border-radius: 4px;
+      font-size: 10px;
+      cursor: pointer;
+      transition: all 0.3s;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 4px;
+    }
+
+    .voice-btn:hover {
+      background: rgba(0, 243, 255, 0.2);
+      transform: translateY(-1px);
+    }
+
+    .voice-btn:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+      transform: none;
+    }
+
+    .voice-btn.recording {
+      background: rgba(255, 82, 82, 0.2);
+      border-color: #ff5252;
+      color: #ff5252;
+      animation: pulse 1.5s infinite;
+    }
+
+    .voice-btn.speaking {
+      background: rgba(76, 175, 80, 0.2);
+      border-color: #4caf50;
+      color: #4caf50;
+      animation: pulse 1.5s infinite;
+    }
+
+    @keyframes pulse {
+      0% { box-shadow: 0 0 0 0 rgba(0, 243, 255, 0.7); }
+      70% { box-shadow: 0 0 0 10px rgba(0, 243, 255, 0); }
+      100% { box-shadow: 0 0 0 0 rgba(0, 243, 255, 0); }
+    }
+
+    /* 语音播放时的消息动画 */
+    @keyframes messageSpeak {
+      0%, 100% { transform: scale(1); }
+      50% { transform: scale(1.02); }
+    }
+
+    .chat-msg.speaking {
+      animation: messageSpeak 1.5s ease-in-out infinite;
+      border-left: 3px solid var(--accent);
+    }
+
+    /* 语音状态指示器 */
+    .voice-status {
+      font-size: 10px;
+      color: var(--text-dim);
+      text-align: center;
+      margin-top: 5px;
+      min-height: 15px;
+    }
+
+    .voice-status.active {
+      color: var(--primary);
+    }
+
+    /* 简化的全息舞台 */
+    .hologram-stage { 
+      flex: 1; 
+      position: relative; 
+      background: radial-gradient(circle at bottom, #0f2438 0%, #03050c 70%); 
+      border: 1px solid var(--glass-border); 
+      border-radius: 4px; 
+      margin: 12px; 
+      overflow: hidden; 
+      display: flex; 
+      flex-direction: column; 
+      align-items: center; 
+      justify-content: center; 
+      min-height: 200px; 
+    }
+    
+    .stage-caption { 
+      position: absolute; 
+      bottom: 20px; 
+      background: rgba(0,0,0,0.8); 
+      border: 1px solid var(--primary); 
+      color: var(--primary); 
+      padding: 6px 16px; 
+      border-radius: 999px; 
+      font-size: 12px; 
+      z-index: 30; 
+    }
+
+    /* 移动端适配 */
+    @media (max-width: 768px) {
+      body {
+        height: auto;
+        overflow-y: auto;
+        padding-bottom: 20px;
+      }
+
+      header {
+        height: auto;
+        min-height: 80px;
+        padding-bottom: 10px;
+      }
+      
+      .header-top {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 5px;
+      }
+      
+      .system-status {
+        font-size: 9px;
+        gap: 8px;
+      }
+      
+      .nav-bar {
+        height: auto;
+        flex-wrap: wrap;
+        gap: 5px;
+        padding: 5px;
+      }
+      
+      .nav-btn {
+        padding: 5px 10px;
+        font-size: 11px;
+        flex: 1;
+        text-align: center;
+      }
+
+      #page-app.active {
+        display: flex;
+        flex-direction: column;
+        height: auto;
+        gap: 15px;
+        padding-bottom: 50px;
+      }
+
+      .glass-panel {
+        max-height: none;
+        overflow: visible;
+      }
+      
+      #relicList {
+        max-height: 150px; 
+        overflow-y: auto;
+        border-bottom: 1px solid var(--glass-border);
+      }
+
+      .hologram-stage {
+        min-height: 300px;
+        order: -1;
+        margin: 0;
+      }
+
+      .chat-container {
+        height: 250px;
+      }
+      
+      /* 视频生成页面适配 */
+      .video-workspace {
+        display: flex;
+        flex-direction: column;
+        height: auto;
+      }
+      .video-canvas {
+        height: 200px;
+      }
+      
+      body::after {
+        display: none;
+      }
+      
+      .main-viewport {
+        padding: 10px;
+      }
+    }
+  </style>
+</head>
+<body>
+
+<header>
+  <div class="header-top">
+    <div class="brand">
+      <h1>TALKING RELICS <span style="font-size: 12px; font-family:'Orbitron'; opacity: 0.6;">// Neo4j增强版</span></h1>
+      <p>语义驱动叙事与全息展陈系统 + Neo4j知识图谱</p>
+    </div>
+    <div class="system-status">
+      <div class="status-item" id="sysStatus">🟢 SYS: ONLINE</div>
+      <div class="status-item" id="netStatus">🔵 NET: SECURE</div>
+      <div class="status-item" id="dbStatus">🗄️ DB: CONNECTING...</div>
+    </div>
+  </div>
+  
+  <nav class="nav-bar">
+    <button class="nav-btn active" onclick="switchPage('app')" id="btn-app">全息终端</button>
+    <button class="nav-btn" onclick="switchPage('video')" id="btn-video">视频生成</button>
+    <button class="nav-btn" onclick="switchPage('knowledge')" id="btn-knowledge">知识图谱</button>
+    <button class="nav-btn" onclick="switchPage('compare')" id="btn-compare">对比分析</button>
+  </nav>
+</header>
+
+<main class="main-viewport">
+  
+  <section id="page-app" class="page-section active">
+    <div class="glass-panel">
+      <div class="panel-header">
+        <div class="panel-title">📂 文物知识库</div>
+        <span class="panel-tag" id="dbTag">检测中...</span>
+      </div>
+      <div id="relicList" class="relic-list">
+        <div style="text-align:center; padding:20px; color:var(--text-dim);">正在加载文物数据...</div>
+      </div>
+    </div>
+
+    <div class="hologram-stage">
+      <img id="stageImage" src="" alt="Artifact Hologram" 
+           style="display:none; max-height: 70%; max-width: 80%; object-fit: contain; filter: drop-shadow(0 0 15px var(--primary)); transition: all 0.5s;">
+      
+      <div id="stagePlaceholder" style="font-size: 48px; opacity: 0.3;">🏛️</div>
+      
+      <div class="stage-caption" id="stageCaption">等待选择文物...</div>
+    </div>
+
+    <div class="glass-panel">
+      <div class="panel-header">
+        <div class="panel-title">💬 语义交互控制台</div>
+        <span class="panel-tag" id="aiTag">LLM</span>
+      </div>
+      
+      <div class="controls">
+        <div class="control-row">
+          <div class="control-group">
+            <select id="personaSelect">
+              <option value="tourist">普通游客</option>
+              <option value="child">儿童/学生</option>
+              <option value="scholar">专业学者</option>
+            </select>
+          </div>
+          <div class="control-group">
+            <select id="styleSelect">
+              <option value="personified">拟人化 (第一人称)</option>
+              <option value="guide">讲解员模式</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="control-group">
+          <textarea id="questionInput" placeholder="输入自然语言指令...&#10;&#10;Neo4j增强功能示例：&#10;• 和你同时期的文物还有哪些？&#10;• 你们这个地区有什么文化特色？&#10;• 你和其他文物有什么关系？"></textarea>
+        </div>
+
+        <div class="control-row">
+          <button class="cyber-btn" id="generateBtn">🚀 启动对话</button>
+          <button class="cyber-btn secondary" id="clearBtn">🗑️ 清除</button>
+        </div>
+
+        <div class="voice-controls">
+          <button class="voice-btn" id="voiceInputBtn">🎤 语音输入</button>
+          <button class="voice-btn" id="voiceOutputBtn">🔊 语音播放</button>
+        </div>
+        <div class="voice-status" id="voiceStatus">语音功能就绪 · 不同角色有不同语音效果</div>
+      </div>
+
+      <div class="chat-container" id="chatLog">
+        <div style="font-size:12px; color:var(--text-dim); text-align:center;">[系统就绪] 请选择文物开始对话。Neo4j增强版支持智能关联查询。</div>
+      </div>
+    </div>
+  </section>
+
+  <section id="page-video" class="page-section">
+    <div class="video-workspace">
+      <div class="video-input-panel">
+        <div class="section-title">🎬 AI视频生成器</div>
+        
+        <div class="input-group">
+          <label class="input-label">视频描述</label>
+          <textarea id="videoPrompt" class="text-input" placeholder="描述你想生成的视频内容...&#10;&#10;示例：&#10;• 三星堆青铜面具在博物馆展示&#10;• 古代文物修复过程&#10;• 文物背后的历史故事"></textarea>
+        </div>
+        
+        <div class="params-grid">
+          <div class="param-item">
+            <label class="input-label">视频风格</label>
+            <select id="videoStyle" class="param-select">
+              <option value="realistic">写实风格</option>
+              <option value="artistic">艺术风格</option>
+              <option value="documentary">纪录片风格</option>
+              <option value="animation">动画风格</option>
+            </select>
+          </div>
+          
+          <div class="param-item">
+            <label class="input-label">视频时长</label>
+            <select id="videoDuration" class="param-select">
+              <option value="5">5秒</option>
+              <option value="10">10秒</option>
+              <option value="15">15秒</option>
+            </select>
+          </div>
+        </div>
+        
+        <button id="generateVideoBtn" class="generate-btn">🚀 生成视频</button>
+      </div>
+      
+      <div class="video-preview-panel">
+        <div class="section-title">📺 视频预览</div>
+        
+        <div class="video-canvas" id="videoCanvas">
+          <div id="videoPlaceholder">等待生成视频...</div>
+          <video id="videoPlayer" style="display:none;" controls></video>
+        </div>
+        
+        <div class="progress-bar" id="progressBar" style="display:none;">
+          <div class="progress-fill" id="progressFill"></div>
+        </div>
+        
+        <div id="videoStatus" style="font-size: 12px; color: var(--text-dim); text-align: center; margin-bottom: 15px;">
+          准备就绪
+        </div>
+        
+        <div class="video-controls">
+          <button class="control-btn" id="playVideoBtn" disabled>▶️ 播放</button>
+          <button class="control-btn" id="pauseVideoBtn" disabled>⏸️ 暂停</button>
+          <button class="control-btn" id="downloadVideoBtn" disabled>💾 下载</button>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section id="page-knowledge" class="page-section">
+    <div style="text-align: center; padding: 50px; color: var(--text-dim);">
+      <h2 style="color: var(--primary); margin-bottom: 20px;">🗄️ 知识图谱可视化</h2>
+      <p>此功能正在开发中，将展示Neo4j中的文物关系网络</p>
+      <div style="margin-top: 30px;">
+        <button class="cyber-btn" onclick="testKnowledgeGraph()">🔍 测试图谱连接</button>
+      </div>
+      <div id="graphResult" style="margin-top: 20px; font-size: 12px;"></div>
+    </div>
+  </section>
+
+  <section id="page-compare" class="page-section">
+    <div style="text-align: center; padding: 50px; color: var(--text-dim);">
+      <h2 style="color: var(--primary); margin-bottom: 20px;">🔍 文物对比分析</h2>
+      <p>基于Neo4j知识图谱的智能文物对比功能</p>
+      <div style="margin-top: 30px;">
+        <button class="cyber-btn" onclick="showComparison()">📊 开始对比</button>
+      </div>
+    </div>
+  </section>
+
+</main>
+
+<script>
+  // 全局变量
+  let currentRelic = null;
+  let dataSourceInfo = null;
+  let recognition = null;
+  let synthesis = null;
+  let isRecording = false;
+  let isSpeaking = false;
+  let lastBotMessage = '';
+
+  // 初始化语音功能 - 情感增强版
+  function initSpeechFeatures() {
+    // 检查浏览器支持
+    if ('webkitSpeechRecognition' in window || 'SpeechRecognition' in window) {
+      const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+      recognition = new SpeechRecognition();
+      
+      recognition.continuous = false;
+      recognition.interimResults = false;
+      recognition.lang = 'zh-CN';
+      
+      recognition.onstart = function() {
+        isRecording = true;
+        updateVoiceStatus('🎤 正在录音...', 'recording');
+        document.getElementById('voiceInputBtn').classList.add('recording');
+      };
+      
+      recognition.onresult = function(event) {
+        const transcript = event.results[0][0].transcript;
+        document.getElementById('questionInput').value = transcript;
+        updateVoiceStatus(`识别结果: ${transcript}`, 'active');
+        
+        // 自动发送识别的文本
+        setTimeout(() => {
+          document.getElementById('generateBtn').click();
+        }, 1000);
+      };
+      
+      recognition.onerror = function(event) {
+        updateVoiceStatus(`语音识别错误: ${event.error}`, 'error');
+        stopRecording();
+      };
+      
+      recognition.onend = function() {
+        stopRecording();
+      };
+    } else {
+      updateVoiceStatus('浏览器不支持语音识别', 'error');
+      document.getElementById('voiceInputBtn').disabled = true;
+    }
+
+    // 检查语音合成支持并初始化语音列表
+    if ('speechSynthesis' in window) {
+      synthesis = window.speechSynthesis;
+      
+      // 等待语音列表加载完成
+      function loadVoices() {
+        const voices = synthesis.getVoices();
+        if (voices.length > 0) {
+          const chineseVoices = voices.filter(voice => 
+            voice.lang.includes('zh') || 
+            voice.name.includes('Chinese') ||
+            voice.name.includes('中文') ||
+            voice.name.includes('Xiaoxiao') ||
+            voice.name.includes('Yaoyao')
+          );
+          
+          if (chineseVoices.length > 0) {
+            updateVoiceStatus(`✅ 语音就绪 · 发现${chineseVoices.length}个中文语音`, 'active');
+            setTimeout(() => {
+              updateVoiceStatus('语音功能就绪 · 不同角色有不同语音效果', '');
+            }, 3000);
+          } else {
+            updateVoiceStatus('⚠️ 未找到中文语音，将使用系统默认', '');
+          }
+        } else {
+          // 语音列表可能还在加载中
+          setTimeout(loadVoices, 100);
+        }
+      }
+      
+      // 监听语音列表变化
+      synthesis.onvoiceschanged = loadVoices;
+      loadVoices(); // 立即尝试加载
+      
+    } else {
+      updateVoiceStatus('浏览器不支持语音合成', 'error');
+      document.getElementById('voiceOutputBtn').disabled = true;
+    }
+  }
+
+  // 更新语音状态
+  function updateVoiceStatus(message, type = '') {
+    const statusEl = document.getElementById('voiceStatus');
+    statusEl.textContent = message;
+    statusEl.className = `voice-status ${type}`;
+  }
+
+  // 开始录音
+  function startRecording() {
+    if (recognition && !isRecording) {
+      try {
+        recognition.start();
+      } catch (error) {
+        updateVoiceStatus('录音启动失败', 'error');
+      }
+    }
+  }
+
+  // 停止录音
+  function stopRecording() {
+    isRecording = false;
+    document.getElementById('voiceInputBtn').classList.remove('recording');
+    if (!document.getElementById('voiceInputBtn').textContent.includes('停止')) {
+      updateVoiceStatus('语音功能就绪', '');
+    }
+  }
+
+  // 语音播放 - 终极优化版，让浏览器语音尽可能自然
+  function speakText(text) {
+    console.log('speakText 收到文本:', text); // 调试日志
+    
+    if (synthesis && text) {
+      // 验证文本内容
+      if (typeof text !== 'string') {
+        console.error('语音文本不是字符串:', typeof text, text);
+        updateVoiceStatus('❌ 语音文本格式错误', 'error');
+        return;
+      }
+      
+      // 检查是否包含URL
+      if (text.includes('http://') || text.includes('https://') || text.includes('localhost')) {
+        console.error('语音文本包含URL:', text);
+        updateVoiceStatus('❌ 语音文本包含URL，已跳过', 'error');
+        return;
+      }
+      
+      // 停止当前播放
+      synthesis.cancel();
+      
+      // 预处理文本，让语音更自然
+      let processedText = preprocessTextForNaturalSpeech(text);
+      console.log('预处理后的文本:', processedText); // 调试日志
+      
+      // 选择最佳语音 - 更严格的筛选
+      const voices = synthesis.getVoices();
+      let selectedVoice = null;
+      
+      // 按优先级选择最自然的中文语音
+      const voicePriority = [
+        // Windows 10/11 高质量语音
+        'Microsoft Xiaoxiao Online (Natural) - Chinese (Mainland)',
+        'Microsoft Yunxi Online (Natural) - Chinese (Mainland)', 
+        'Microsoft Xiaoyi Online (Natural) - Chinese (Mainland)',
+        // Windows 传统语音
+        'Microsoft Xiaoxiao - Chinese (Simplified, PRC)',
+        'Microsoft Yaoyao - Chinese (Simplified, PRC)',
+        'Microsoft Kangkang - Chinese (Simplified, PRC)',
+        // Google Chrome 语音
+        'Google 普通话（中国大陆）',
+        'Google 中文（中国大陆）',
+        // 其他可能的语音
+        'zh-CN-XiaoxiaoNeural',
+        'zh-CN-YunxiNeural'
+      ];
+      
+      // 尝试找到最佳语音
+      for (let voiceName of voicePriority) {
+        selectedVoice = voices.find(voice => 
+          voice.name === voiceName || 
+          voice.name.includes(voiceName.split(' ')[1]) ||
+          voice.name.includes('Xiaoxiao') ||
+          voice.name.includes('Natural')
+        );
+        if (selectedVoice) {
+          console.log(`选择语音: ${selectedVoice.name}`);
+          break;
+        }
+      }
+      
+      // 如果没找到，选择任何中文语音
+      if (!selectedVoice) {
+        selectedVoice = voices.find(voice => 
+          voice.lang.includes('zh-CN') || 
+          voice.lang.includes('zh') ||
+          voice.name.includes('Chinese') ||
+          voice.name.includes('中文')
+        );
+      }
+      
+      const utterance = new SpeechSynthesisUtterance(processedText);
+      utterance.lang = 'zh-CN';
+      
+      if (selectedVoice) {
+        utterance.voice = selectedVoice;
+      }
+      
+      // 根据角色调整参数 - 更细致的调整
+      const persona = document.getElementById('personaSelect').value;
+      const style = document.getElementById('styleSelect').value;
+      
+      if (persona === 'child') {
+        utterance.rate = 0.7;     // 更慢，让小朋友听清楚
+        utterance.pitch = 1.3;    // 高音调，更可爱
+        utterance.volume = 0.95;  // 稍大声
+      } else if (persona === 'scholar') {
+        utterance.rate = 0.6;     // 很慢，体现深思熟虑
+        utterance.pitch = 0.85;   // 低音调，更有威严
+        utterance.volume = 0.85;  // 适中音量
+      } else { // tourist
+        utterance.rate = 0.75;    // 稍慢，清晰友好
+        utterance.pitch = 1.05;   // 稍高，更热情
+        utterance.volume = 0.9;   // 较大音量
+      }
+      
+      // 拟人化模式的额外调整
+      if (style === 'personified') {
+        utterance.pitch = Math.min(2.0, utterance.pitch + 0.15);  // 增加个性
+        utterance.rate = Math.min(1.0, utterance.rate + 0.05);    // 稍快一点
+      }
+      
+      // 根据文物类型微调
+      if (currentRelic === 'bronze_ding') {
+        utterance.pitch *= 0.95;  // 青铜鼎更沉稳
+      } else if (currentRelic === 'rock_carving') {
+        utterance.pitch *= 1.05;  // 石刻更优雅
+      }
+      
+      // 事件处理
+      utterance.onstart = function() {
+        isSpeaking = true;
+        document.getElementById('voiceOutputBtn').classList.add('speaking');
+        document.getElementById('voiceOutputBtn').textContent = '⏹️ 停止播放';
+        
+        const voiceInfo = selectedVoice ? selectedVoice.name : '系统默认';
+        const isNatural = voiceInfo.includes('Natural') || voiceInfo.includes('Neural');
+        const qualityIcon = isNatural ? '🌟' : '🔊';
+        
+        updateVoiceStatus(`${qualityIcon} 播放中: ${voiceInfo}`, 'active');
+        
+        // 添加视觉反馈
+        const chatMsgs = document.querySelectorAll('.chat-msg.bot');
+        if (chatMsgs.length > 0) {
+          const lastMsg = chatMsgs[chatMsgs.length - 1];
+          lastMsg.classList.add('speaking');
+        }
+      };
+      
+      utterance.onend = function() {
+        stopSpeaking();
+        
+        // 给出语音质量反馈
+        const isHighQuality = selectedVoice && (
+          selectedVoice.name.includes('Natural') || 
+          selectedVoice.name.includes('Neural') ||
+          selectedVoice.name.includes('Xiaoxiao')
+        );
+        
+        if (isHighQuality) {
+          updateVoiceStatus('✨ 播放完成 - 高质量语音', '');
+        } else {
+          updateVoiceStatus('✅ 播放完成 - 建议配置Azure获得更自然效果', '');
+        }
+        
+        setTimeout(() => {
+          updateVoiceStatus('语音功能就绪 · 不同角色有不同语音效果', '');
+        }, 3000);
+      };
+      
+      utterance.onerror = function(event) {
+        updateVoiceStatus(`❌ 播放出错: ${event.error}`, 'error');
+        stopSpeaking();
+      };
+      
+      // 开始播放
+      synthesis.speak(utterance);
+    }
+  }
+  
+  // 文本预处理函数 - 让语音更自然
+  function preprocessTextForNaturalSpeech(text) {
+    let processed = text;
+    
+    // 1. 处理数字，转换为中文读法
+    processed = processed.replace(/(\d+)/g, (match) => {
+      const num = parseInt(match);
+      if (num < 10) {
+        const digits = ['零', '一', '二', '三', '四', '五', '六', '七', '八', '九'];
+        return digits[num];
+      } else if (num < 100) {
+        return numberToChinese(num);
+      }
+      return match; // 大数字保持原样
+    });
+    
+    // 2. 添加自然停顿
+    processed = processed.replace(/([。！？])/g, '$1 '); // 句号后加空格
+    processed = processed.replace(/([，；])/g, '$1 ');   // 逗号后加空格
+    
+    // 3. 处理语气词，让它们更突出
+    const emotionalWords = {
+      '哇': '哇～',
+      '哎呀': '哎呀～',
+      '咦': '咦？',
+      '嘿嘿': '嘿嘿～',
+      '哼': '哼！'
+    };
+    
+    for (let [word, replacement] of Object.entries(emotionalWords)) {
+      processed = processed.replace(new RegExp(word, 'g'), replacement);
+    }
+    
+    // 4. 处理省略号，增加停顿感
+    processed = processed.replace(/\.\.\./g, '… ');
+    processed = processed.replace(/…/g, '… ');
+    
+    // 5. 处理感叹号，增加情感
+    processed = processed.replace(/！/g, '！ ');
+    processed = processed.replace(/!/g, '! ');
+    
+    return processed;
+  }
+  
+  // 数字转中文（简单版）
+  function numberToChinese(num) {
+    if (num < 10) return ['零', '一', '二', '三', '四', '五', '六', '七', '八', '九'][num];
+    if (num < 20) return '十' + (num === 10 ? '' : numberToChinese(num - 10));
+    if (num < 100) {
+      const tens = Math.floor(num / 10);
+      const ones = num % 10;
+      return numberToChinese(tens) + '十' + (ones === 0 ? '' : numberToChinese(ones));
+    }
+    return num.toString(); // 超过100的数字保持原样
+  }
+
+  // 停止语音播放 - 支持Edge TTS和浏览器语音合成
+  function stopSpeaking() {
+    // 停止浏览器语音合成
+    if (synthesis) {
+      synthesis.cancel();
+    }
+    
+    // 停止Edge TTS音频
+    if (window.currentAudio) {
+      window.currentAudio.pause();
+      window.currentAudio.currentTime = 0;
+      window.currentAudio = null;
+    }
+    
+    isSpeaking = false;
+    document.getElementById('voiceOutputBtn').classList.remove('speaking');
+    document.getElementById('voiceOutputBtn').textContent = '🔊 语音播放';
+    
+    // 移除消息动画效果
+    const chatMsgs = document.querySelectorAll('.chat-msg.bot');
+    chatMsgs.forEach(msg => {
+      msg.style.animation = '';
+      msg.classList.remove('speaking');
+    });
+    
+    updateVoiceStatus('语音功能就绪 · 不同角色有不同语音效果', '');
+  }
+
+  // 页面切换
+  function switchPage(pageId) {
+    document.querySelectorAll('.page-section').forEach(el => el.classList.remove('active'));
+    document.querySelectorAll('.nav-btn').forEach(el => el.classList.remove('active'));
+    
+    document.getElementById('page-' + pageId).classList.add('active');
+    document.getElementById('btn-' + pageId).classList.add('active');
+  }
+
+  // 更新系统状态显示
+  function updateSystemStatus(dbConnected) {
+    const dbStatus = document.getElementById('dbStatus');
+    const dbTag = document.getElementById('dbTag');
+    
+    if (dbConnected) {
+      dbStatus.textContent = '🗄️ Neo4j: CONNECTED';
+      dbStatus.className = 'status-item neo4j';
+      dbTag.textContent = 'Neo4j';
+      dbTag.className = 'panel-tag neo4j';
+    } else {
+      dbStatus.textContent = '📚 Static: ACTIVE';
+      dbStatus.className = 'status-item static';
+      dbTag.textContent = 'Static';
+      dbTag.className = 'panel-tag static';
+    }
+  }
+
+  // 加载文物列表
+  async function loadRelics() {
+    try {
+      const response = await fetch('/api/relics');
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+      
+      const relics = await response.json();
+      renderRelics(relics);
+      
+      if (relics.length > 0) {
+        selectRelic(relics[0].id);
+      }
+    } catch (error) {
+      console.error('加载文物失败:', error);
+      document.getElementById('relicList').innerHTML = 
+        '<div style="color:var(--secondary); padding:20px; text-align:center;">[错误] 无法连接到服务器</div>';
+    }
+  }
+
+  // 渲染文物列表
+  function renderRelics(relics) {
+    const listEl = document.getElementById('relicList');
+    listEl.innerHTML = '';
+    
+    relics.forEach(relic => {
+      const item = document.createElement('div');
+      item.className = 'relic-item';
+      item.dataset.id = relic.id;
+      item.innerHTML = `
+        <div class="relic-thumb">${relic.name[0]}</div>
+        <div class="relic-info">
+          <h4>${relic.name}</h4>
+          <p>${relic.era}</p>
+        </div>
+      `;
+      item.addEventListener('click', () => selectRelic(relic.id));
+      listEl.appendChild(item);
+    });
+  }
+
+  // 图片映射表（修正版）
+  const relicImageMap = {
+    'bronze_ding': 'image/1.jpg',   // 青铜鼎
+    'rock_carving': 'images/2.jpg', // 大足石刻
+    'boat_model': 'image/3.jpg'     // 古船模型
+  };
+
+  // 选择文物
+  function selectRelic(id) {
+    document.querySelectorAll('.relic-item').forEach(el => {
+      if (el.dataset.id === id) {
+        el.classList.add('active');
+      } else {
+        el.classList.remove('active');
+      }
+    });
+    
+    currentRelic = id;
+    const selectedItem = document.querySelector('.relic-item.active');
+    
+    if (selectedItem) {
+      const name = selectedItem.querySelector('h4').textContent;
+      document.getElementById('stageCaption').textContent = `已选择：${name}`;
+      
+      const stageImg = document.getElementById('stageImage');
+      const stagePlaceholder = document.getElementById('stagePlaceholder');
+      const imgPath = relicImageMap[id];
+
+      if (imgPath) {
+        stageImg.src = imgPath;
+        stageImg.style.display = 'block';
+        stagePlaceholder.style.display = 'none';
+        
+        stageImg.animate([
+            { transform: 'scale(0.8)', opacity: 0 },
+            { transform: 'scale(1)', opacity: 1 }
+        ], { duration: 400, easing: 'ease-out' });
+      } else {
+        stageImg.style.display = 'none';
+        stagePlaceholder.style.display = 'block';
+      }
+    }
+  }
+
+  // 添加聊天消息（增强版，显示数据源）
+  function appendChatMessage(role, text, sourceInfo = null) {
+    const chatLog = document.getElementById('chatLog');
+    const msg = document.createElement('div');
+    msg.className = 'chat-msg ' + role;
+    msg.textContent = text;
+    
+    // 添加数据源标识
+    if (role === 'bot' && sourceInfo) {
+      const badge = document.createElement('div');
+      badge.className = `data-source-badge ${sourceInfo.type}`;
+      badge.textContent = sourceInfo.type === 'neo4j' ? 'Neo4j' : 'Static';
+      badge.title = sourceInfo.description;
+      msg.appendChild(badge);
+    }
+    
+    // 保存最后的机器人回复用于语音播放（无论是否有sourceInfo）
+    if (role === 'bot') {
+      lastBotMessage = text;
+      console.log('保存语音内容:', text); // 调试日志
+    }
+    
+    chatLog.appendChild(msg);
+    chatLog.scrollTop = chatLog.scrollHeight;
+  }
+
+  // 文物对话生成（增强版）
+  document.getElementById('generateBtn').addEventListener('click', async () => {
+    const question = document.getElementById('questionInput').value.trim() || '请自我介绍';
+    
+    if (!currentRelic) {
+      alert('请先选择一个文物');
+      return;
+    }
+    
+    appendChatMessage('user', question);
+    
+    try {
+      const response = await fetch('/api/generate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          relic_id: currentRelic,
+          question: question,
+          persona: document.getElementById('personaSelect').value,
+          style: document.getElementById('styleSelect').value
+        })
+      });
+      
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+      
+      const result = await response.json();
+      
+      if (result.error) {
+        appendChatMessage('bot', `错误: ${result.error}`);
+      } else {
+        // 更新数据源信息
+        if (result.data_source) {
+          dataSourceInfo = result.data_source;
+          updateSystemStatus(result.data_source.type === 'neo4j');
+        }
+        
+        appendChatMessage('bot', result.answer, result.data_source);
+        
+        // 自动语音播放（如果启用）
+        if (result.answer && document.getElementById('voiceOutputBtn').dataset.autoPlay === 'true') {
+          setTimeout(() => {
+            speakText(result.answer);
+          }, 500);
+        }
+      }
+      
+    } catch (error) {
+      console.error('对话生成失败:', error);
+      appendChatMessage('bot', '连接错误，请检查服务器状态');
+    }
+  });
+
+  // 清除聊天记录
+  document.getElementById('clearBtn').addEventListener('click', () => {
+    document.getElementById('chatLog').innerHTML = 
+      '<div style="font-size:12px; color:var(--text-dim); text-align:center;">[系统就绪] 请选择文物开始对话。Neo4j增强版支持智能关联查询。</div>';
+    lastBotMessage = '';
+  });
+
+  // 语音输入按钮事件
+  document.getElementById('voiceInputBtn').addEventListener('click', () => {
+    if (isRecording) {
+      recognition.stop();
+    } else {
+      startRecording();
+    }
+  });
+
+  // 语音输出按钮事件 - 支持Edge TTS
+  document.getElementById('voiceOutputBtn').addEventListener('click', () => {
+    console.log('语音播放按钮被点击'); // 调试日志
+    console.log('当前isSpeaking状态:', isSpeaking); // 调试日志
+    console.log('lastBotMessage内容:', lastBotMessage); // 调试日志
+    
+    if (isSpeaking) {
+      stopSpeaking();
+    } else {
+      if (lastBotMessage) {
+        // 优先尝试Edge TTS，失败则使用浏览器语音合成
+        tryEdgeTTSSpeech(lastBotMessage);
+      } else {
+        updateVoiceStatus('没有可播放的内容', 'error');
+        setTimeout(() => {
+          updateVoiceStatus('语音功能就绪 · 不同角色有不同语音效果', '');
+        }, 2000);
+      }
+    }
+  });
+
+  // 尝试使用自然语音合成（豆包优先，Edge TTS降级）- 直接播放音频流
+  async function tryEdgeTTSSpeech(text) {
+    console.log('tryEdgeTTSSpeech 收到文本:', text);
+    const persona = document.getElementById('personaSelect').value;
+    const style = document.getElementById('styleSelect').value;
+    
+    updateVoiceStatus('🎤 正在生成自然语音...', 'active');
+    
+    // 直接使用Edge TTS（豆包已移除）
+    try {
+      const response = await fetch('/api/synthesize-speech', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ text, persona, style })
+      });
+      
+      console.log('Edge TTS响应状态:', response.status, response.headers.get('Content-Type'));
+      
+      // 检查响应类型
+      const contentType = response.headers.get('Content-Type');
+      
+      if (contentType && contentType.includes('audio/mpeg')) {
+        // 收到音频数据流
+        const audioBlob = await response.blob();
+        console.log('收到Edge TTS音频Blob，大小:', audioBlob.size, 'bytes');
+        
+        // 创建Blob URL并播放
+        const audioUrl = URL.createObjectURL(audioBlob);
+        playEdgeTTSAudio(audioUrl, { voice: 'Edge TTS' }, true);
+        return; // 成功，直接返回
+      }
+      
+      // Edge TTS失败，降级到浏览器语音合成
+      console.log('Edge TTS不可用，使用浏览器语音合成');
+      updateVoiceStatus('🔄 切换到浏览器语音合成', '');
+      speakText(text);
+      
+    } catch (error) {
+      console.error('语音服务请求失败:', error);
+      updateVoiceStatus('🔄 网络错误，使用浏览器语音合成', '');
+      speakText(text);
+    }
+  }
+  
+  // 播放Edge TTS生成的音频
+  // 播放Edge TTS生成的音频
+  function playEdgeTTSAudio(audioUrl, voiceConfig, isBlobUrl = false) {
+    console.log('playEdgeTTSAudio 收到音频URL:', audioUrl, 'isBlobUrl:', isBlobUrl);
+    
+    // 停止当前播放
+    if (synthesis) {
+      synthesis.cancel();
+    }
+    
+    // 停止之前的音频
+    if (window.currentAudio) {
+      window.currentAudio.pause();
+      // 如果之前是Blob URL，释放它
+      if (window.currentAudioIsBlobUrl) {
+        URL.revokeObjectURL(window.currentAudio.src);
+      }
+      window.currentAudio = null;
+    }
+    
+    // 创建音频元素
+    const audio = new Audio(audioUrl);
+    window.currentAudioIsBlobUrl = isBlobUrl;
+    
+    audio.onloadstart = () => {
+      console.log('音频开始加载');
+      isSpeaking = true;
+      document.getElementById('voiceOutputBtn').classList.add('speaking');
+      document.getElementById('voiceOutputBtn').textContent = '⏹️ 停止播放';
+      
+      const voiceName = voiceConfig.voice || 'Edge TTS';
+      updateVoiceStatus(`🌟 Edge TTS播放中: ${voiceName}`, 'active');
+      
+      // 添加视觉反馈
+      const chatMsgs = document.querySelectorAll('.chat-msg.bot');
+      if (chatMsgs.length > 0) {
+        const lastMsg = chatMsgs[chatMsgs.length - 1];
+        lastMsg.classList.add('speaking');
+      }
+    };
+    
+    audio.onended = () => {
+      console.log('音频播放完成');
+      // 如果是Blob URL，播放完成后释放它
+      if (isBlobUrl) {
+        URL.revokeObjectURL(audioUrl);
+      }
+      stopSpeaking();
+      updateVoiceStatus('✨ Edge TTS播放完成 - 效果如何？', '');
+      setTimeout(() => {
+        updateVoiceStatus('语音功能就绪 · 不同角色有不同语音效果', '');
+      }, 3000);
+    };
+    
+    audio.onerror = (e) => {
+      console.error('音频播放失败:', e, '音频URL:', audioUrl);
+      console.error('错误详情:', audio.error);
+      // 如果是Blob URL，出错后也要释放它
+      if (isBlobUrl) {
+        URL.revokeObjectURL(audioUrl);
+      }
+      updateVoiceStatus('❌ 音频文件加载失败，切换到浏览器语音', 'error');
+      if (lastBotMessage) {
+        speakText(lastBotMessage);
+      }
+    };
+    
+    // 开始播放
+    audio.play().catch(e => {
+      console.error('音频播放启动失败:', e, '音频URL:', audioUrl);
+      // 如果是Blob URL，播放失败后也要释放它
+      if (isBlobUrl) {
+        URL.revokeObjectURL(audioUrl);
+      }
+      updateVoiceStatus('❌ 音频播放启动失败，切换到浏览器语音', 'error');
+      if (lastBotMessage) {
+        speakText(lastBotMessage);
+      }
+    });
+    
+    // 保存音频引用以便停止
+    window.currentAudio = audio;
+  }
+
+  // 长按语音输出按钮切换自动播放模式
+  let longPressTimer;
+  document.getElementById('voiceOutputBtn').addEventListener('mousedown', () => {
+    longPressTimer = setTimeout(() => {
+      const btn = document.getElementById('voiceOutputBtn');
+      const isAutoPlay = btn.dataset.autoPlay === 'true';
+      btn.dataset.autoPlay = !isAutoPlay;
+      
+      if (!isAutoPlay) {
+        btn.style.borderColor = 'var(--accent)';
+        btn.style.color = 'var(--accent)';
+        updateVoiceStatus('自动播放已启用', 'active');
+      } else {
+        btn.style.borderColor = 'var(--primary)';
+        btn.style.color = 'var(--primary)';
+        updateVoiceStatus('自动播放已禁用', '');
+      }
+      
+      setTimeout(() => {
+        updateVoiceStatus('语音功能就绪', '');
+      }, 2000);
+    }, 1000);
+  });
+
+  document.getElementById('voiceOutputBtn').addEventListener('mouseup', () => {
+    clearTimeout(longPressTimer);
+  });
+
+  document.getElementById('voiceOutputBtn').addEventListener('mouseleave', () => {
+    clearTimeout(longPressTimer);
+  });
+
+  // 测试知识图谱连接
+  async function testKnowledgeGraph() {
+    const resultDiv = document.getElementById('graphResult');
+    resultDiv.innerHTML = '🔄 正在测试连接...';
+    
+    try {
+      const response = await fetch('/api/knowledge-graph');
+      const result = await response.json();
+      
+      if (result.status === 'neo4j_connected') {
+        resultDiv.innerHTML = `
+          <div style="color: var(--neo4j-color);">
+            ✅ Neo4j连接成功<br>
+            📊 节点数量: ${result.nodes.length}<br>
+            🔗 关系数量: ${result.edges.length}
+          </div>
+        `;
+      } else {
+        resultDiv.innerHTML = `
+          <div style="color: var(--static-color);">
+            ⚠️ Neo4j未连接，使用静态模式<br>
+            状态: ${result.status}
+          </div>
+        `;
+      }
+    } catch (error) {
+      resultDiv.innerHTML = `
+        <div style="color: var(--secondary);">
+          ❌ 连接测试失败: ${error.message}
+        </div>
+      `;
+    }
+  }
+
+  // 显示对比功能
+  function showComparison() {
+    alert('文物对比功能正在开发中，将基于Neo4j知识图谱提供智能对比分析！');
+  }
+
+  // 背景轮播
+  const artifactConfig = [
+    { url: 'images/1.jpg', brightness: 0.85 },
+    { url: 'images/2.jpg', brightness: 0.40 },
+    { url: 'images/3.jpg', brightness: 0.70 }
+  ];
+  
+  let currentBackgroundIndex = 0;
+  
+  function rotateBackground() {
+    const body = document.body;
+    const currentItem = artifactConfig[currentBackgroundIndex];
+    
+    body.style.setProperty('--current-bg', `url(${currentItem.url})`);
+    body.style.setProperty('--bg-brightness', currentItem.brightness);
+    
+    currentBackgroundIndex = (currentBackgroundIndex + 1) % artifactConfig.length;
+  }
+  
+  // ========== 视频生成功能 ==========
+  let isGenerating = false;
+  let currentVideoUrl = null;
+
+  // 视频生成按钮事件
+  document.getElementById('generateVideoBtn').addEventListener('click', async () => {
+    if (isGenerating) return;
+    
+    const prompt = document.getElementById('videoPrompt').value.trim();
+    if (!prompt) {
+      alert('请输入视频描述');
+      return;
+    }
+    
+    isGenerating = true;
+    const btn = document.getElementById('generateVideoBtn');
+    const progressBar = document.getElementById('progressBar');
+    const progressFill = document.getElementById('progressFill');
+    const videoStatus = document.getElementById('videoStatus');
+    const videoPlayer = document.getElementById('videoPlayer');
+    const videoPlaceholder = document.getElementById('videoPlaceholder');
+    
+    // 更新UI状态
+    btn.disabled = true;
+    btn.textContent = '⏳ 生成中...';
+    progressBar.style.display = 'block';
+    progressFill.style.width = '0%';
+    videoStatus.textContent = '正在连接AI服务...';
+    videoStatus.style.color = 'var(--primary)';
+    
+    try {
+      // 模拟进度
+      let progress = 0;
+      const progressInterval = setInterval(() => {
+        progress += Math.random() * 15;
+        if (progress > 90) progress = 90;
+        progressFill.style.width = progress + '%';
+      }, 500);
+      
+      const response = await fetch('/api/generate-video', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          text: prompt,  // 后端期望的参数名是 text
+          style: document.getElementById('videoStyle').value,
+          duration: parseInt(document.getElementById('videoDuration').value)
+        })
+      });
+      
+      clearInterval(progressInterval);
+      progressFill.style.width = '100%';
+      
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}`);
+      }
+      
+      const result = await response.json();
+      
+      if (result.error) {
+        throw new Error(result.error);
+      }
+      
+      // 显示视频
+      if (result.video_url) {
+        currentVideoUrl = result.video_url;
+        videoPlayer.src = currentVideoUrl;
+        videoPlayer.style.display = 'block';
+        videoPlaceholder.style.display = 'none';
+        
+        // 启用控制按钮
+        document.getElementById('playVideoBtn').disabled = false;
+        document.getElementById('pauseVideoBtn').disabled = false;
+        document.getElementById('downloadVideoBtn').disabled = false;
+        
+        videoStatus.textContent = '✅ 视频生成成功！';
+        videoStatus.style.color = 'var(--accent)';
+        
+        // 自动播放
+        setTimeout(() => {
+          videoPlayer.play();
+        }, 500);
+      } else {
+        throw new Error('未返回视频URL');
+      }
+      
+    } catch (error) {
+      console.error('视频生成失败:', error);
+      videoStatus.textContent = `❌ 生成失败: ${error.message}`;
+      videoStatus.style.color = 'var(--secondary)';
+      progressBar.style.display = 'none';
+    } finally {
+      isGenerating = false;
+      btn.disabled = false;
+      btn.textContent = '🚀 生成视频';
+      
+      setTimeout(() => {
+        progressBar.style.display = 'none';
+      }, 2000);
+    }
+  });
+
+  // 视频控制按钮
+  document.getElementById('playVideoBtn').addEventListener('click', () => {
+    const video = document.getElementById('videoPlayer');
+    video.play();
+  });
+
+  document.getElementById('pauseVideoBtn').addEventListener('click', () => {
+    const video = document.getElementById('videoPlayer');
+    video.pause();
+  });
+
+  document.getElementById('downloadVideoBtn').addEventListener('click', () => {
+    if (currentVideoUrl) {
+      const a = document.createElement('a');
+      a.href = currentVideoUrl;
+      a.download = 'generated_video.mp4';
+      a.click();
+    }
+  });
+  
+  // 初始化
+  rotateBackground();
+  setInterval(rotateBackground, 8000);
+  loadRelics();
+  initSpeechFeatures();
+</script>
+</body>
+</html>
