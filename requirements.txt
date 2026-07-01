@@ -1,0 +1,23 @@
+# Python 3.8+
+
+# Core dependencies
+requests>=2.31.0
+
+# Neo4j support (recommended)
+neo4j>=5.14.0
+
+# Voice synthesis
+edge-tts>=6.1.9
+
+# Environment variables
+python-dotenv>=1.0.0
+
+# Optional: Video generation
+# opencv-python>=4.8.0
+# pillow>=10.0.0
+
+# Optional: Development and testing
+# pytest>=7.4.0
+# pytest-asyncio>=0.21.0
+# black>=23.0.0
+# flake8>=6.0.0

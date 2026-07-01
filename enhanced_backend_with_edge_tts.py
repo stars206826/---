@@ -49,6 +49,22 @@ except ImportError:
     print("⚠️ Edge TTS未安装，将使用浏览器语音合成")
     print("要启用自然语音，请运行: pip install edge-tts")
 
+# 尝试导入 SeeDance 集成模块
+try:
+    from seedance_integration import (
+        SeeDanceVideoGenerator,
+        ConfigManager,
+        ValidationError,
+        APIError,
+        TimeoutError as SeeDanceTimeoutError
+    )
+    SEEDANCE_MODULE_AVAILABLE = True
+    print("✅ SeeDance 集成模块已加载")
+except ImportError as e:
+    SEEDANCE_MODULE_AVAILABLE = False
+    print(f"⚠️ SeeDance 集成模块未找到: {e}")
+    print("   SeeDance AI 视频生成功能将不可用")
+
 # 豆包TTS已移除
 DOUBAO_TTS_AVAILABLE = False
 
@@ -62,13 +78,13 @@ AUDIO_DIR = os.path.join(BASE_DIR, "audio")
 os.makedirs(OUTPUT_DIR, exist_ok=True)
 os.makedirs(AUDIO_DIR, exist_ok=True)
 
-# API配置
-API_KEY = "sk-icmlygwecglrkvlnehccofuzdpqpksxhlmqsuzqqeteagsbn"
+# API配置 - 从环境变量读取
+API_KEY = os.getenv("SILICONFLOW_KEY", "sk-icmlygwecglrkvlnehccofuzdpqpksxhlmqsuzqqeteagsbn")
 
-# Neo4j配置
-NEO4J_URI = "bolt://localhost:7687"
-NEO4J_USER = "neo4j"
-NEO4J_PASSWORD = "12345678"
+# Neo4j配置 - 从环境变量读取
+NEO4J_URI = os.getenv("NEO4J_URI", "bolt://localhost:7687")
+NEO4J_USER = os.getenv("NEO4J_USER", "neo4j")
+NEO4J_PASSWORD = os.getenv("NEO4J_PASSWORD", "12345678")
 
 # 豆包语音服务配置（已禁用）
 DOUBAO_CONFIG = {
@@ -77,11 +93,20 @@ DOUBAO_CONFIG = {
 
 # 视频映射表
 VIDEO_MAP = {
-    "大足石刻制造": "2.mp4",
-    "石刻": "2.mp4",
-    "青铜鼎": "2.mp4",
-    "三星堆": "三星堆.mp4",
-    "文物": "video.mp4"
+    "大足石刻制造": "大足石刻制造.mp4",
+    "大足石刻": "大足石刻制造.mp4",
+    "石刻": "大足石刻制造.mp4",
+    "青铜鼎制造": "青铜鼎制造.mp4",
+    "青铜鼎": "青铜鼎制造.mp4",
+    "青铜面具制造": "青铜面具制造.mp4",
+    "青铜面具": "青铜面具制造.mp4",
+    "三星堆": "青铜面具制造.mp4",
+    "兵马俑出土": "兵马俑出土.mp4",
+    "兵马俑": "兵马俑出土.mp4",
+    "金缕玉衣": "金丝缕衣制造.mp4",
+    "金丝缕衣": "金丝缕衣制造.mp4",
+    "三峡古船": "三峡古航运木船制造.mp4",
+    "古船": "三峡古航运木船制造.mp4"
 }
 
 # 静态知识库
@@ -106,6 +131,27 @@ STATIC_KNOWLEDGE_GRAPH = {
         "story": "我承载着盐巴与茶叶，逆流而上，见证了纤夫们的汗水与号子声。",
         "craft": "采用柏木制作，榫卯结构，船底设计适应了三峡的险滩急流。",
         "relations": ["三峡文化载体", "古代交通工具", "川江号子相关"]
+    },
+    "sanxingdui_bronze_mask": {
+        "id": "sanxingdui_bronze_mask", "name": "三星堆青铜面具", "era": "商代晚期",
+        "summary": "三星堆遗址出土的神秘青铜面具，具有突出的眼球和夸张的造型，体现了古蜀文明独特的艺术风格。",
+        "story": "我是来自古蜀王国的神秘面具，在地下沉睡了三千多年。我的眼睛如此突出，是为了更好地观察天地万物。我见证了古蜀文明的辉煌，那时的工匠们用最精湛的技艺塑造了我，让我成为沟通神灵与人间的桥梁。",
+        "craft": "失蜡法铸造工艺：首先用蜂蜡制作面具模型，然后用细泥包裹蜡模形成外范，加热使蜡液流出形成空腔，再将熔化的青铜液倒入空腔中。冷却后打破泥范，就得到了青铜面具。表面采用鎏金工艺，将金汞合金涂在青铜表面，加热使汞蒸发，金就牢固地附着在青铜上，呈现出金光闪闪的效果。",
+        "relations": ["古蜀文明代表", "青铜器类别", "宗教祭祀用品", "考古重大发现"]
+    },
+    "terracotta_warrior": {
+        "id": "terracotta_warrior", "name": "兵马俑武士俑", "era": "秦代",
+        "summary": "秦始皇陵兵马俑坑出土的武士俑，身高约1.8米，神态威严，是秦代军事文化的杰出代表。",
+        "story": "我是秦始皇的地下军团中的一员，两千多年来一直守护着皇陵。每一个兄弟都有着不同的面容，我们代表着大秦帝国的威武之师。虽然是陶土制成，但我们的心中依然燃烧着保卫帝国的忠诚之火。",
+        "craft": "兵马俑采用分段制作工艺：先用陶轮制作身体各部分，头部、躯干、四肢分别制作。头部用模具压制基本形状，再手工雕刻面部细节，每个俑的表情都不相同。身体部分采用泥条盘筑法，一层层堆砌成型。各部分制作完成后进行组装，接缝处用泥浆粘合。整体成型后在表面涂抹细泥，精修细节。最后入窑烧制，温度控制在950-1000度，烧制时间约15-20天。",
+        "relations": ["秦代文化", "陶俑类别", "军事文化", "世界文化遗产"]
+    },
+    "jade_burial_suit": {
+        "id": "jade_burial_suit", "name": "金缕玉衣", "era": "西汉",
+        "summary": "西汉中山靖王刘胜的金缕玉衣，由2498片玉片用金丝连缀而成，是汉代丧葬文化的珍贵实物。",
+        "story": "我是为中山靖王刘胜量身定制的永恒之衣。每一片玉都经过精心挑选，每一根金丝都承载着对永生的渴望。古人相信玉能保持尸身不腐，而我就是这种信念的完美体现。穿上我，就能在另一个世界继续享受荣华富贵。",
+        "craft": "金缕玉衣制作工艺极其复杂：首先要选择优质的和田玉，按照人体各部位的形状切割成2498片大小不等的玉片。每片玉片都要经过切割、打磨、钻孔三道工序。切割使用铜质线锯配合解玉砂，打磨用细砂石反复研磨至光滑，然后在四角钻出细孔。金丝制作需要将黄金拉成细丝，直径仅0.1毫米。最后按照人体结构，用金丝将玉片逐一串联编织，形成完整的玉衣。",
+        "relations": ["汉代文化", "玉器类别", "丧葬文化", "皇室文物"]
     }
 }
 
@@ -255,6 +301,34 @@ edge_tts_service = EdgeTTSService()
 doubao_tts_service = None
 logging.info("📦 豆包TTS功能已禁用")
 
+# 初始化 SeeDance 视频生成器
+seedance_generator = None
+SEEDANCE_AVAILABLE = False
+
+if SEEDANCE_MODULE_AVAILABLE:
+    try:
+        # 创建配置管理器
+        seedance_config = ConfigManager()
+        
+        # 检查 API 密钥是否配置
+        api_key = seedance_config.get("api.key")
+        if api_key:
+            # 创建视频生成器，传入降级函数
+            seedance_generator = SeeDanceVideoGenerator(
+                config=seedance_config,
+                fallback_func=fetch_mapped_video  # 将在后面定义
+            )
+            SEEDANCE_AVAILABLE = True
+            logging.info("✅ SeeDance 2.0 AI视频生成可用")
+        else:
+            logging.warning("⚠️ SeeDance API 密钥未配置")
+            logging.info("   请设置 SEEDANCE_API_KEY 环境变量或在 seedance_config.json 中配置")
+    except Exception as e:
+        logging.error(f"❌ SeeDance 初始化失败: {e}")
+        logging.info("   SeeDance AI 视频生成功能将不可用")
+else:
+    logging.info("📹 SeeDance 模块未加载，仅使用本地视频功能")
+
 # Neo4j知识图谱类（简化版，复用原有代码）
 class Neo4jKnowledgeGraph:
     def __init__(self, uri, user, password):
@@ -371,6 +445,139 @@ class Neo4jKnowledgeGraph:
                 "name": "静态知识库", 
                 "icon": "📚"
             }
+    
+    def get_graph_data(self):
+        """获取知识图谱数据用于可视化"""
+        if not self.connected:
+            # 返回静态数据
+            nodes = [
+                {"id": k, "name": v["name"], "type": "文物"} 
+                for k, v in STATIC_KNOWLEDGE_GRAPH.items()
+            ]
+            return {
+                "status": "static",
+                "nodes": nodes,
+                "edges": []
+            }
+        
+        try:
+            with self.driver.session() as session:
+                # 获取所有节点，确保每个节点都有ID
+                nodes_result = session.run("""
+                    MATCH (n)
+                    RETURN 
+                        COALESCE(n.id, n.name, toString(id(n))) as id, 
+                        n.name as name, 
+                        labels(n)[0] as type
+                    LIMIT 50
+                """)
+                nodes = [dict(record) for record in nodes_result]
+                
+                # 获取所有关系，确保source和target都有有效ID
+                edges_result = session.run("""
+                    MATCH (a)-[r]->(b)
+                    RETURN 
+                        COALESCE(a.id, a.name, toString(id(a))) as source, 
+                        COALESCE(b.id, b.name, toString(id(b))) as target, 
+                        type(r) as relationship
+                    LIMIT 100
+                """)
+                edges = [dict(record) for record in edges_result]
+                
+                return {
+                    "status": "neo4j_connected",
+                    "nodes": nodes,
+                    "edges": edges
+                }
+        except Exception as e:
+            logging.error(f"❌ 获取图谱数据失败: {e}")
+            # 降级到静态数据
+            nodes = [
+                {"id": k, "name": v["name"], "type": "文物"} 
+                for k, v in STATIC_KNOWLEDGE_GRAPH.items()
+            ]
+            return {
+                "status": "static",
+                "nodes": nodes,
+                "edges": []
+            }
+    
+    def compare_relics(self, relic_a_id: str, relic_b_id: str):
+        """对比两个文物"""
+        relic_a = self.get_artifact_info(relic_a_id)
+        relic_b = self.get_artifact_info(relic_b_id)
+        
+        if not relic_a or not relic_b:
+            return {
+                "error": "文物信息不存在"
+            }
+        
+        # 分析共同点
+        commonalities = []
+        
+        # 时代对比
+        if relic_a.get('era') == relic_b.get('era'):
+            commonalities.append(f"都属于{relic_a.get('era')}时期")
+        
+        # 地区对比
+        if relic_a.get('location') and relic_b.get('location'):
+            if relic_a.get('location') == relic_b.get('location'):
+                commonalities.append(f"都来自{relic_a.get('location')}地区")
+        
+        # 类别对比
+        if relic_a.get('category') and relic_b.get('category'):
+            if relic_a.get('category') == relic_b.get('category'):
+                commonalities.append(f"都属于{relic_a.get('category')}类别")
+        
+        # 用途对比
+        if 'relations' in relic_a and 'relations' in relic_b:
+            common_relations = set(relic_a['relations']) & set(relic_b['relations'])
+            if common_relations:
+                for rel in common_relations:
+                    commonalities.append(rel)
+        
+        # 分析差异点
+        differences = []
+        
+        # 时代差异
+        if relic_a.get('era') != relic_b.get('era'):
+            differences.append(f"时代不同：{relic_a.get('name')}属于{relic_a.get('era')}，{relic_b.get('name')}属于{relic_b.get('era')}")
+        
+        # 工艺差异
+        if relic_a.get('craft') and relic_b.get('craft'):
+            if relic_a.get('craft') != relic_b.get('craft'):
+                differences.append(f"工艺不同：{relic_a.get('name')}采用{relic_a.get('craft')[:20]}...，{relic_b.get('name')}采用{relic_b.get('craft')[:20]}...")
+        
+        # 材质差异（从名称推断）
+        materials_a = []
+        materials_b = []
+        if '青铜' in relic_a.get('name', ''):
+            materials_a.append('青铜')
+        if '石' in relic_a.get('name', ''):
+            materials_a.append('石材')
+        if '木' in relic_a.get('name', ''):
+            materials_a.append('木材')
+        
+        if '青铜' in relic_b.get('name', ''):
+            materials_b.append('青铜')
+        if '石' in relic_b.get('name', ''):
+            materials_b.append('石材')
+        if '木' in relic_b.get('name', ''):
+            materials_b.append('木材')
+        
+        if materials_a and materials_b and materials_a != materials_b:
+            differences.append(f"材质不同：{relic_a.get('name')}为{'、'.join(materials_a)}制品，{relic_b.get('name')}为{'、'.join(materials_b)}制品")
+        
+        # 如果没有找到明显差异，添加通用描述
+        if not differences:
+            differences.append(f"{relic_a.get('name')}和{relic_b.get('name')}各具特色，体现了不同的文化内涵")
+        
+        return {
+            "relic_a": relic_a,
+            "relic_b": relic_b,
+            "commonalities": commonalities,
+            "differences": differences
+        }
 
 # 初始化知识图谱
 kg = Neo4jKnowledgeGraph(NEO4J_URI, NEO4J_USER, NEO4J_PASSWORD)
@@ -724,6 +931,35 @@ class EnhancedServerHandler(SimpleHTTPRequestHandler):
             # 返回文物列表
             relics_list = [{"id": k, "name": v["name"], "era": v["era"]} for k, v in STATIC_KNOWLEDGE_GRAPH.items()]
             self._send_json(relics_list)
+            return
+        
+        elif parsed.path == "/api/knowledge-graph":
+            logging.info("📊 处理知识图谱请求")
+            # 返回知识图谱数据
+            graph_data = kg.get_graph_data()
+            self._send_json(graph_data)
+            return
+        
+        elif parsed.path == "/api/seedance-status":
+            logging.info("📊 处理 SeeDance 状态查询")
+            # 返回 SeeDance 状态信息
+            status_info = {
+                "available": SEEDANCE_AVAILABLE,
+                "api_configured": False,
+                "cache_enabled": False,
+                "fallback_enabled": True
+            }
+            
+            if SEEDANCE_AVAILABLE and seedance_generator:
+                try:
+                    status_info["api_configured"] = bool(seedance_generator.config.get("api.key"))
+                    status_info["cache_enabled"] = seedance_generator.config.get("cache.enabled", True)
+                    status_info["fallback_enabled"] = seedance_generator.config.get("fallback.enabled", True)
+                except Exception as e:
+                    logging.error(f"❌ 获取 SeeDance 状态失败: {e}")
+            
+            self._send_json(status_info)
+            return
             
         elif parsed.path.startswith("/audio/"):
             # 提供音频文件服务
@@ -850,10 +1086,59 @@ class EnhancedServerHandler(SimpleHTTPRequestHandler):
             })
         
         elif parsed.path == "/api/generate-video":
-            logging.info("🎬 处理视频请求")
-            # 视频生成接口
+            logging.info("🎬 处理本地视频请求")
+            # 本地视频生成接口（保持不变）
             text = data.get("text", "")
             result = fetch_mapped_video(text)
+            self._send_json(result)
+        
+        elif parsed.path == "/api/generate-video-ai":
+            logging.info("🎬 处理 AI 视频生成请求")
+            # AI 视频生成接口
+            text = data.get("text", "")
+            resolution = data.get("resolution", "1080p")
+            duration = data.get("duration", 10)
+            aspect_ratio = data.get("aspect_ratio", "16:9")
+            
+            if not SEEDANCE_AVAILABLE:
+                # SeeDance 不可用，降级到本地视频
+                logging.warning("⚠️ SeeDance 不可用，降级到本地视频")
+                result = fetch_mapped_video(text)
+                result["fallback"] = True
+                result["fallback_reason"] = "SeeDance API 不可用"
+                self._send_json(result)
+                return
+            
+            try:
+                # 调用 SeeDance 生成器
+                result = seedance_generator.generate_video(
+                    prompt=text,
+                    resolution=resolution,
+                    duration=duration,
+                    aspect_ratio=aspect_ratio,
+                    use_cache=True
+                )
+                self._send_json(result)
+                
+            except Exception as e:
+                logging.error(f"❌ AI 视频生成失败: {e}")
+                # 降级到本地视频
+                result = fetch_mapped_video(text)
+                result["fallback"] = True
+                result["fallback_reason"] = f"AI 生成失败: {str(e)}"
+                self._send_json(result)
+        
+        elif parsed.path == "/api/compare-relics":
+            logging.info("🔍 处理文物对比请求")
+            # 文物对比接口
+            relic_a = data.get("relic_a")
+            relic_b = data.get("relic_b")
+            
+            if not relic_a or not relic_b:
+                self._send_json({"error": "缺少文物ID"}, 400)
+                return
+            
+            result = kg.compare_relics(relic_a, relic_b)
             self._send_json(result)
         
         else:

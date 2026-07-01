@@ -101,10 +101,30 @@ Thumbs.db
 *.tmp
 *.temp
 
-# 大型媒体文件（可选，根据需要调整）
-# *.mp4
-# *.avi
-# *.mov
-# *.jpg
-# *.png
-# *.gif
+# 音频和视频文件（大文件不提交到仓库）
+audio/*.mp3
+audio/*.wav
+output/*.mp4
+output/*.avi
+output/*.mov
+!output/README.md
+
+# Neo4j 数据文件
+neo4j_data/
+*.db
+
+# 敏感信息
+*.key
+*.pem
+*.p12
+secrets/
+
+# 备份和副本文件
+*.bak
+*副本*
+*copy*
+*- 副本*
+
+# Kiro AI 工作目录
+.kiro/memory/
+.kiro/plans/
